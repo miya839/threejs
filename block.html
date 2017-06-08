@@ -13,61 +13,267 @@
     </head>
     <body>
         <script src="js/three.js"></script>
+        <script src="js/stats.min.js"></script>
+        <script src="js/OrbitControls.js"></script>
+        <script src="js/ammo.js"></script>
         <script>
-        var camera, scene, renderer;
+        var camera, scene, stats, renderer;
+        var controller;
         var mesh;
         var width = window.innerWidth;
         var height = window.innerHeight;
         var asp = width/height;
+        var update_trans = new Ammo.btTransform();
         
-        init();
+        var world = init();
+
+        var ground = make_ground(
+                new Ammo.btVector3(5,0.5,5),
+                new Ammo.btVector3(0,-0.5,0)
+                );
+        var sphere = make_sphere(
+                1,1,new Ammo.btVector3(0,15,0)
+                );
+        var cube = make_cube(
+                1,1,new Ammo.btVector3(0,15,2)
+                );
+        
         animate();
 
         function init(){
-            camera = new THREE.PerspectiveCamera(70,asp,1,1000);
-            camera.position.set(0,0,400);
-
             scene = new THREE.Scene();
-            var texture = new THREE.TextureLoader().load('image/crate.gif');
-            var geometry = new THREE.BoxBufferGeometry(100,100,100);
-            var material = new THREE.MeshBasicMaterial({map:texture});
-            mesh = new THREE.Mesh(geometry,material);
+            return {
+                ammo: init_ammo(),
+                three_renderer: init_three(),
+                three_scene: scene,
+                three_camera: init_camera()
+            };
 
-            meshs = [
-                new THREE.Mesh(geometry,material),
-                new THREE.Mesh(geometry,material),
-                new THREE.Mesh(geometry,material)
-            ];
-            meshs[0].position.set(200,0,0);
-            meshs[1].position.set(-200,0,0);
-            for (var i = 0;i<3;i++){
-                scene.add(meshs[i]);
+            function init_ammo(){
+                var collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();
+                var dispatcher = new Ammo.btCollisionDispatcher(collisionConfiguration);
+                var overlappingPairCatch = new Ammo.btDbvtBroadphase();
+                var solver = new Ammo.btSequentialImpulseConstraintSolver();
+                var dynamicsWorld = new Ammo.btDiscreteDynamicsWorld(
+                    dispatcher,overlappingPairCatch,
+                    solver,collisionConfiguration);
+                
+                dynamicsWorld.setGravity(new Ammo.btVector3(0,-10,0));
+                return dynamicsWorld;
             }
 
-            renderer = new THREE.WebGLRenderer();
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(width,height);
-            document.body.appendChild(renderer.domElement);
+            function init_three(){
+                renderer = new THREE.WebGLRenderer();
+                renderer.setPixelRatio(window.devicePixelRatio);
+                renderer.setSize(width,height);
+                document.body.appendChild(renderer.domElement);
+                return renderer;
 
-            window.addEventListener('resize',onWindowResize,false);
+            }
+            
+            function init_camera(){
+            
+                camera = new THREE.PerspectiveCamera(70,asp,1,100);
+                camera.position.set(0,10,10);
 
+
+                scene.add(new THREE.AmbientLight(0x505050));
+
+                controller = new THREE.OrbitControls(camera);
+
+               var dirLight = new THREE.DirectionalLight(0xffffff);
+                dirLight.position.set(0,10,0);
+                dirLight.castShadow = true;
+                scene.add(dirLight);
+
+                var spotLight = new THREE.SpotLight(0xffffff);
+                spotLight.angle = Math.PI/5;
+                spotLight.penubra = 0.2;
+                spotLight.position.set(0,10,0);
+                spotLight.castShadow = true;
+                scene.add(spotLight);
+
+                return camera;
+            }
         }
+
+        
+        function make_ground(size,pos){
+            return {
+                ammo: make_ground_ammo(),
+                three: make_ground_three()
+            };
+            function make_ground_ammo(){
+                var form = new Ammo.btTransform();
+                form.setIdentity();
+                form.setOrigin(pos);
+                var ground = new Ammo.btRigidBody(
+                        new Ammo.btRigidBodyConstructionInfo(
+                            0,
+                            new Ammo.btDefaultMotionState(form),
+                            new Ammo.btBoxShape(size),
+                            new Ammo.btVector3(0,0,0)
+                            )
+                        );
+                world.ammo.addRigidBody(ground);
+                return ground;
+            }
+            function make_ground_three(){
+                var ground = new THREE.Mesh(
+                        new THREE.BoxGeometry(size.x() *2,size.y()*2,size.z()*2),
+                        new THREE.MeshLambertMaterial({color: 0x999999})
+                        );
+                ground.position.set(pos.x(),pos.y(),pos.z());
+                world.three_scene.add(ground);
+            }
+        }
+        function make_sphere(r,mass,pos){
+            return {
+                ammo:make_object_ammo(),
+                three:make_object_three()
+            };
+            function make_object_ammo(){
+                var form = new Ammo.btTransform();
+                form.setIdentity();
+                form.setOrigin(pos);
+                var sphere = new Ammo.btSphereShape(r);
+                var localInertia = new Ammo.btVector3(0,0,0);
+                sphere.calculateLocalInertia(mass,localInertia);
+                var spherebody = new Ammo.btRigidBody(
+                        new Ammo.btRigidBodyConstructionInfo(
+                            mass,
+                            new Ammo.btDefaultMotionState(form),
+                            sphere,
+                            localInertia
+                            )
+                    );
+
+                spherebody.setLinearVelocity(new Ammo.btVector3(0,0,1));
+                spherebody.setRestitution(0.6);
+                spherebody.setFriction(0.1);
+                spherebody.setDamping(0,0.05);
+                spherebody.setAngularFactor(new Ammo.btVector3(1,1,1));
+                spherebody.setLinearFactor(new Ammo.btVector3(1,1,1));
+                world.ammo.addRigidBody(spherebody);
+                return spherebody;
+            }
+            function make_object_three(){
+                var geometry = new THREE.SphereGeometry(r,16,16);
+                var material = new THREE.MeshLambertMaterial({color:0xff0000});
+                var sphere = new THREE.Mesh(geometry,material);
+                sphere.position.set(pos.x(),pos.y(),pos.z());
+                world.three_scene.add(sphere);
+                return sphere;
+            }
+        }
+
+        function make_cube(r,mass,pos){
+            return {
+                ammo:make_object_ammo(),
+                three:make_object_three()
+            };
+            function make_object_ammo(){
+                var form = new Ammo.btTransform();
+                form.setIdentity();
+                form.setOrigin(pos);
+                var sphere = new Ammo.btSphereShape(r);
+                var localInertia = new Ammo.btVector3(0,0,0);
+                sphere.calculateLocalInertia(mass,localInertia);
+                var spherebody = new Ammo.btRigidBody(
+                        new Ammo.btRigidBodyConstructionInfo(
+                            mass,
+                            new Ammo.btDefaultMotionState(form),
+                            sphere,
+                            localInertia
+                            )
+                    );
+
+                spherebody.setLinearVelocity(new Ammo.btVector3(0,0,1));
+                spherebody.setRestitution(0.6);
+                spherebody.setFriction(0.1);
+                spherebody.setDamping(0,0.05);
+                spherebody.setAngularFactor(new Ammo.btVector3(1,1,1));
+                spherebody.setLinearFactor(new Ammo.btVector3(1,1,1));
+                world.ammo.addRigidBody(spherebody);
+                return spherebody;
+            }
+            function make_object_three(){
+                var geometry = new THREE.CubeGeometry(r,r,r);
+                var material = new THREE.MeshLambertMaterial({color:0xff0000});
+                var sphere = new THREE.Mesh(geometry,material);
+                sphere.position.set(pos.x(),pos.y(),pos.z());
+                world.three_scene.add(sphere);
+                return sphere;
+            }
+        }
+
+
+
+
+            /*var texture = new THREE.TextureLoader().load('image/gold.jpg');
+            var geometry = new THREE.BoxBufferGeometry(1,1,1);
+            var material = new THREE.MeshBasicMaterial({map:texture});
+            var material1 = new THREE.MeshPhongMaterial({color: 0xffff00});
+
+
+
+            var torus = new THREE.Mesh(
+                new THREE.TorusGeometry(2,.5,3,3),
+                new THREE.MeshLambertMaterial({color:0xff0000}));
+            scene.add(torus);
+                    
+
+            
+            stats = new Stats();
+            document.body.appendChild(stats.domElement);
+            window.addEventListener('resize',onWindowResize,false);
 
         function onWindowResize(){
             camera.aspect = width/height;
             camera.updateProjectMatrix();
 
-            renderer.setSize(width,height);
+            renderer.setSize(width,height);*/
+        function update(){
+            world.ammo.stepSimulation(1/60,0);
+            sphere.ammo.getMotionState().getWorldTransform(update_trans);
+            sphere.three.position.set(
+                    update_trans.getOrigin().x(),
+                    update_trans.getOrigin().y(),
+                    update_trans.getOrigin().z()
+                    );
+            sphere.three.quaternion.set(
+                    update_trans.getRotation().x(),
+                    update_trans.getRotation().y(),
+                    update_trans.getRotation().z(),
+                    update_trans.getRotation().w()
+                    );
+            
+            cube.ammo.getMotionState().getWorldTransform(update_trans);
+            cube.three.position.set(
+                    update_trans.getOrigin().x(),
+                    update_trans.getOrigin().y(),
+                    update_trans.getOrigin().z()
+                    );
+            cube.three.quaternion.set(
+                    update_trans.getRotation().x(),
+                    update_trans.getRotation().y(),
+                    update_trans.getRotation().z(),
+                    update_trans.getRotation().w()
+                    );
 
         }
 
+
         function animate(){
-            requestAnimationFrame(animate);
-            for(var i = 0;i<3;i++){
+            window.requestAnimationFrame(animate);
+            /*for(var i = 0;i<3;i++){
                 meshs[i].rotation.x += .05
                 meshs[i].rotation.y += .01
-            }
-            
+            }*/
+            update();
+            world.three_renderer.render(world.three_scene,world.three_camera);
+            controller.update();
+            stats.update();
             renderer.render(scene,camera);
         }
 
