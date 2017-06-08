@@ -18,26 +18,49 @@
         <script src="js/ammo.js"></script>
         <script>
         var camera, scene, stats, renderer;
-        var controller;
+        var controller, isShiftDown = false;
         var mesh;
+        var num = 0;
         var width = window.innerWidth;
         var height = window.innerHeight;
         var asp = width/height;
+        var mouse = new THREE.Vector2();
+        var raycaster = new THREE.Raycaster();
         var update_trans = new Ammo.btTransform();
         
         var world = init();
 
         var ground = make_ground(
-                new Ammo.btVector3(5,0.5,5),
+                new Ammo.btVector3(10,0.5,10),
                 new Ammo.btVector3(0,-0.5,0)
                 );
-        var sphere = make_sphere(
-                1,1,new Ammo.btVector3(0,15,0)
+        var ground = make_ground(
+                new Ammo.btVector3(.5,2,10),
+                new Ammo.btVector3(10,1.5,0)
                 );
-        var cube = make_cube(
-                1,1,new Ammo.btVector3(0,15,2)
+        var ground = make_ground(
+                new Ammo.btVector3(.5,2,10),
+                new Ammo.btVector3(-10,1.5,0)
                 );
-        
+        var ground = make_ground(
+                new Ammo.btVector3(10,2,.5),
+                new Ammo.btVector3(0,1.5,10)
+                );
+        var ground = make_ground(
+                new Ammo.btVector3(10,2,.5),
+                new Ammo.btVector3(0,1.5,-10)
+                );
+
+
+        //var sphere = make_sphere(
+        //        1,1,new Ammo.btVector3(0,15,0)
+        //        );
+        var cube = [];
+        //cube.push(make_sphere(1,1,new Ammo.btVector3(0,5,0)));
+        stats = Stats();
+        document.body.appendChild(stats.domElement);
+        document.addEventListener('mousedown',onMouseDown,false);
+        document.addEventListener('keydown', onKeyDown,false);
         animate();
 
         function init(){
@@ -115,6 +138,8 @@
                             new Ammo.btVector3(0,0,0)
                             )
                         );
+                ground.setRestitution(1);
+                ground.setFriction(1);
                 world.ammo.addRigidBody(ground);
                 return ground;
             }
@@ -158,8 +183,10 @@
                 return spherebody;
             }
             function make_object_three(){
+                var texture = new THREE.TextureLoader().load('image/earthmap1k.jpg');
                 var geometry = new THREE.SphereGeometry(r,16,16);
-                var material = new THREE.MeshLambertMaterial({color:0xff0000});
+
+                var material = new THREE.MeshLambertMaterial({map:texture});
                 var sphere = new THREE.Mesh(geometry,material);
                 sphere.position.set(pos.x(),pos.y(),pos.z());
                 world.three_scene.add(sphere);
@@ -198,78 +225,69 @@
                 return spherebody;
             }
             function make_object_three(){
+                var texture = new THREE.TextureLoader().load('image/gold.jpg');
                 var geometry = new THREE.CubeGeometry(r,r,r);
-                var material = new THREE.MeshLambertMaterial({color:0xff0000});
+                var material = new THREE.MeshLambertMaterial({map:texture});
                 var sphere = new THREE.Mesh(geometry,material);
                 sphere.position.set(pos.x(),pos.y(),pos.z());
                 world.three_scene.add(sphere);
                 return sphere;
             }
         }
+        function onMouseDown(event){
+            event.preventDefault();
+            console.log('click');
+            cube.push(make_sphere(
+                1,1,new Ammo.btVector3(
+                    Math.floor(Math.random()*9)-4,
+                    Math.floor(Math.random()*20),
+                    Math.floor(Math.random()*9)-4
+                )));
+            num++;
+        }
+
+        function onKeyDown(event){
+            switch(event.keyCode){
+                case 82:
+                    world.three_scene.remove(cube[0]);
+                    cube = [];
+                    num = 0;
+            }
+        }
+
+        
+
+        function step(object){
+            object.ammo.getMotionState().getWorldTransform(update_trans);
+            object.three.position.set(
+                    update_trans.getOrigin().x(),
+                    update_trans.getOrigin().y(),
+                    update_trans.getOrigin().z()
+                    );
+            object.three.quaternion.set(
+                    update_trans.getRotation().x(),
+                    update_trans.getRotation().y(),
+                    update_trans.getRotation().z(),
+                    update_trans.getRotation().w()
+                    );
+        }
 
 
 
 
-            /*var texture = new THREE.TextureLoader().load('image/gold.jpg');
-            var geometry = new THREE.BoxBufferGeometry(1,1,1);
-            var material = new THREE.MeshBasicMaterial({map:texture});
-            var material1 = new THREE.MeshPhongMaterial({color: 0xffff00});
-
-
-
-            var torus = new THREE.Mesh(
-                new THREE.TorusGeometry(2,.5,3,3),
-                new THREE.MeshLambertMaterial({color:0xff0000}));
-            scene.add(torus);
-                    
-
-            
-            stats = new Stats();
-            document.body.appendChild(stats.domElement);
-            window.addEventListener('resize',onWindowResize,false);
-
-        function onWindowResize(){
-            camera.aspect = width/height;
-            camera.updateProjectMatrix();
-
-            renderer.setSize(width,height);*/
         function update(){
             world.ammo.stepSimulation(1/60,0);
-            sphere.ammo.getMotionState().getWorldTransform(update_trans);
-            sphere.three.position.set(
-                    update_trans.getOrigin().x(),
-                    update_trans.getOrigin().y(),
-                    update_trans.getOrigin().z()
-                    );
-            sphere.three.quaternion.set(
-                    update_trans.getRotation().x(),
-                    update_trans.getRotation().y(),
-                    update_trans.getRotation().z(),
-                    update_trans.getRotation().w()
-                    );
-            
-            cube.ammo.getMotionState().getWorldTransform(update_trans);
-            cube.three.position.set(
-                    update_trans.getOrigin().x(),
-                    update_trans.getOrigin().y(),
-                    update_trans.getOrigin().z()
-                    );
-            cube.three.quaternion.set(
-                    update_trans.getRotation().x(),
-                    update_trans.getRotation().y(),
-                    update_trans.getRotation().z(),
-                    update_trans.getRotation().w()
-                    );
-
+            //step(sphere); 
+            for (var i =0;i<num;i++){
+                if(num!=0){
+                    step(cube[i]);
+                }
+            }
         }
 
 
         function animate(){
             window.requestAnimationFrame(animate);
-            /*for(var i = 0;i<3;i++){
-                meshs[i].rotation.x += .05
-                meshs[i].rotation.y += .01
-            }*/
             update();
             world.three_renderer.render(world.three_scene,world.three_camera);
             controller.update();
